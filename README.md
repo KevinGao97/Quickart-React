@@ -1,6 +1,5 @@
 # Quickart
 
-## URL to Quickart:
 https://quickart2.herokuapp.com/
 
 ## How to Use the application as a regular user
