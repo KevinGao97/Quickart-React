@@ -14,6 +14,8 @@ import {
   dislikePost,
   deletePost,
 } from '../../actions/postsActions';
+// import { login } from '../../actions/pageActions';
+import Alert from '../Alert';
 import { ThreeSixty } from '@material-ui/icons';
 
 /* Component for the Main Posts Page */
@@ -24,6 +26,8 @@ class PostsPage extends React.Component {
     //Reqiured by Report page
     otherReport: '',
     isReporting: false,
+    postId: "",
+    user: "",
 
     //Required by like
     likes: 0,
@@ -48,7 +52,7 @@ class PostsPage extends React.Component {
     pickUpOptions: '',
     description: '',
   };
-  isAdmin = '';
+  isAdmin = "";
 
   componentDidMount() {
     this.loadPost();
@@ -57,12 +61,13 @@ class PostsPage extends React.Component {
   async loadPost() {
     await this.props.loadAllPosts(localStorage.token);
     let reduxState = store.getState();
+    //This check needs to be updated for admin.
+    let userType = reduxState['loginState']['accType']; // login state
+    this.isAdmin = userType === "admin"
+    
+    this.setState({ user: reduxState['settingsState']})
     this.setState({ posts: reduxState['postsState'] });
     this.setState({ displayPosts: reduxState['postsState'] });
-
-    //This check needs to be updated for admin.
-    let userType = reduxState['loginState']['user'];
-    this.isAdmin = userType === 'admin';
   }
 
   onChangeEvent = e => {
@@ -71,108 +76,96 @@ class PostsPage extends React.Component {
     });
   };
 
-  onPostEvent = async(e) => {
+  onPostEvent = async e => {
     e.preventDefault();
     if (!this.state.title) {
-      this.props.setAlert('A title is required.', 'error');
-    } 
+      this.props.setAlert('A Title is required.', 'error2');
+    } else if (!this.state.price) {
+      this.props.setAlert('A Price is required.', 'error2');
+    } else if (this.state.price < 0) {
+      this.props.setAlert('A price must be a positive value.', 'error2');
+      return;
+    }
     // else if (!this.state.category) {
     //   this.props.setAlert('A category is required.', 'error');
-    // } 
+    // }
     else if (!this.state.postEndDate) {
-      this.props.setAlert('A post end date is required.', 'error');
+      this.props.setAlert('A post end date is required.', 'error2');
     } else if (!this.state.pickUpOptions) {
-      this.props.setAlert('A pick up option is required.', 'error');
+      this.props.setAlert('A pick up option is required.', 'error2');
     } else if (!this.state.description) {
-      this.props.setAlert('A description is required.', 'error');
+      this.props.setAlert('A description is required.', 'error2');
     } else {
       //Default 'Fruit' bug fix....
       if (!this.state.category) {
-        // this.setState({ category: "Fruit" });
         this.state.category = "Fruit";
       }
       await this.props.createPost(this.state, localStorage.token);
-      this.props.history.push('/profile');
+      // this.props.history.push('/profile');
+      //Update the page with the newly created post
+      localStorage.setItem('previousPage', '/posts');
+      this.props.history.push('/loading');
     }
   };
 
-  onDeletePost = e => {
+  onDeletePost = async e => {
     let idDeleting = e.target.value;
-    this.props.deletePost(idDeleting, localStorage.token);
+    await this.props.deletePost(idDeleting, localStorage.token);
     let reduxState = store.getState();
     this.setState({ posts: reduxState['postsState'] });
     this.setState({ displayPosts: reduxState['postsState'] });
+    //Update the page with the removed post
+    localStorage.setItem('previousPage', '/posts');
+    this.props.history.push('/loading');
+    // this.props.setAlert('Post has been successfully deleted.', 'success2');
   };
 
-  onSubmitEvent = e => {
+  onSubmitEvent = async e => {
     e.preventDefault();
-    //Update the redux state
-    this.props.reportPost(this.state);
+    if (!this.state.reason) {
+      this.state.reason = "Fake items";
+    }
+    await this.props.reportPost(this.state);
+    console.log("state: ", this.state)
     this.open_close_report();
   };
 
-  open_close_report = e => {
-    let idreported = e.target.value;
+  open_close_report(e) {
+    //e.preventDefault(); 
     if (this.state.isReporting === false) {
       this.setState({ ['isReporting']: true });
       document.getElementById('reportFormContainer').style.display = 'block';
+      this.setState({ postId: e.target.value });
     } else {
       this.setState({ ['isReporting']: false });
       document.getElementById('reportFormContainer').style.display = 'none';
+      this.props.setAlert('Post has been successfully reported.', 'success2');
     }
   };
 
   //Like and Dislike Button Events
   likeFunction(e) {
     e.preventDefault();
-    console.log(e.target.id);
-
-    //If the post has neither been liked or disliked before
-    if (this.state.likeUpdated == false && this.state.dislikeUpdated == false) {
-      let newLikes = this.state.likes + 1;
-      this.setState({ likes: newLikes });
-      this.setState({ likeUpdated: true });
-    }
-
-    //If the post has been disliked before
-    else if (
-      this.state.likeUpdated == false &&
-      this.state.dislikeUpdated == true
-    ) {
-      let newLikes = this.state.likes + 1;
-      let newDislikes = this.state.dislikes - 1;
-      this.setState({ likes: newLikes });
-      this.setState({ dislikes: newDislikes });
-      this.setState({ likeUpdated: true });
-      this.setState({ dislikeUpdated: false });
-    }
-
-    this.props.likePost(this.state);
+    //Decode the like button and get its Post ID from it
+    let postID = e.target.id.substring(0, e.target.id.length - 1);
+    this.props.likePost(postID, localStorage.token);
+    //Update the like count, which is updated in mongodb but not the local state
+    localStorage.setItem('previousPage', '/posts');
+    this.props.history.push('/loading');
   }
   dislikeFunction(e) {
-    //If the post has neither been liked or disliked before
-    if (this.state.likeUpdated == false && this.state.dislikeUpdated == false) {
-      let newDislikes = this.state.dislikes + 1;
-      this.setState({ dislikes: newDislikes });
-      this.setState({ dislikeUpdated: true });
-    } else if (
-      this.state.likeUpdated == true &&
-      this.state.dislikeUpdated == false
-    ) {
-      let newDislikes = this.state.dislikes + 1;
-      let newLikes = this.state.likes - 1;
-      this.setState({ dislikes: newDislikes });
-      this.setState({ likes: newLikes });
-      this.setState({ dislikeUpdated: true });
-      this.setState({ likeUpdated: false });
-    }
-    this.props.dislikePost(this.state);
+    e.preventDefault();
+    //Decode the dislike button and get its Post ID from it
+    let postID = e.target.id.substring(0, e.target.id.length - 1);
+    this.props.dislikePost(postID, localStorage.token);
+    //Update the dislike count, which is updated in mongodb but not the local state
+    localStorage.setItem('previousPage', '/posts');
+    this.props.history.push('/loading');
   }
 
   searchByTitleName(e) {
     //Database call/query
     //Get Request PostbyName Endpoint, this will get the array of post objects
-
     this.setState({ searchResult: e.target.value }, () => {});
   }
 
@@ -180,6 +173,26 @@ class PostsPage extends React.Component {
     this.setState({ userPrice: parseFloat(e.target.value) }, () => {});
   }
 
+  searchyByLocation(e){
+    const target = e.target.value
+    
+    let reduxState = store.getState()
+    const all_posts = reduxState['postsState'];
+    let lstposting = []
+    if (e.target.value != "Any"){
+      all_posts.forEach(element => {
+        if (element.location === target){
+          lstposting.push(element)
+        }
+      })
+      
+      if(lstposting){
+        this.setState({displayPosts : lstposting})
+      }
+    }else {
+      this.setState({displayPosts: all_posts})
+    }
+  }
   searchByCategoryName(e) {
     const target = e.target.value;
 
@@ -207,17 +220,17 @@ class PostsPage extends React.Component {
         <form className='form' onSubmit={this.onSubmitEvent}>
           <h1>Report User</h1>
           <h4>Reason: </h4>
-          <select id='reason'>
-            <option value='Fake Items'>Fake Product</option>
+          <select id='reason' onChange={this.onChangeEvent}>
+            <option value='Fake Items'>Fake Items</option>
             <option value='Illegal items'>Illegal Items</option>
             <option value='Other'>Other</option>
           </select>
           <input
             className='inputGroup'
-            id='otherReport'
+            id='reportDescription'
             type='text'
             placeholder='Report'
-            onChange={this.onChangeEvent}
+            onChange={this.onChangeEvent} 
           ></input>
           <button type='submit' value='report' className='btn btnDefault-posts'>
             Submit Report
@@ -252,7 +265,7 @@ class PostsPage extends React.Component {
         <div className='lefttGridPost'>
           <Link to='/profile'>
             <img className='circleImgPosts' src={userPicture} alt='' />
-            <h4 className='postUser'>{post.postedBy}</h4>
+            <h4 className='postUser'>{post.name}</h4>
           </Link>
         </div>
         <div className='rightGridPost'>
@@ -263,7 +276,7 @@ class PostsPage extends React.Component {
           <button
             className='btn regularButton likes'
             value={post.likes}
-            id={post.id}
+            id={post._id + '1'}
             onClick={e => this.likeFunction(e)}
           >
             Likes: {post.likes.length}
@@ -271,10 +284,11 @@ class PostsPage extends React.Component {
           <button
             className='btn regularButton dislikes'
             value={post.dislikes}
-            id={post.id}
+            id={post._id + '2'}
             onClick={e => this.dislikeFunction(e)}
           >
-            <span>Dislikes: {post.dislikes.length}</span>
+            {/* <span>Dislikes: {post.dislikes.length}</span> */}
+            Dislikes: {post.dislikes.length}
           </button>
 
           <Link
@@ -286,14 +300,15 @@ class PostsPage extends React.Component {
             View
           </Link>
           {this.isAdmin ? (
-            <button
-              type='button'
-              className='btn btnDefaultDeletePost'
-              value={post._id}
-              onClick={this.onDeletePost}
-            >
-              Delete Post
-            </button>
+            // <button
+            //   type='button'
+            //   className='btn btnDefaultDeletePost'
+            //   value={post._id}
+            //   onClick={this.onDeletePost}
+            // >
+            //   Delete Post
+            // </button>
+            <div></div>
           ) : (
             <button
               id='userReportBtn'
@@ -345,36 +360,44 @@ class PostsPage extends React.Component {
             <h4>Location</h4>
             <div className='filter'>
               <div id='Tag-Content' className='tagContent'>
-                <div className='tagCheckbox'>
-                  <input
-                    type='checkbox'
-                    id='Location1'
-                    className='Location1'
+                <form className='tagCheckbox'>
+                <input
+                    type='radio'
+                    id='Any'
+                    value='Any'
+                    name='Location'
+                    onClick={this.searchyByLocation.bind(this)}
                   ></input>
-                  <label> Toronto</label>
+                  <label htmlFor='Any'> Any</label>
                   <br></br>
                   <input
-                    type='checkbox'
-                    id='Location1'
-                    name='Location1'
+                    type='radio'
+                    id='Toronto'
+                    value='Toronto'
+                    name='Location'
+                    onClick={this.searchyByLocation.bind(this)}
                   ></input>
-                  <label> Ottawa</label>
+                  <label htmlFor='Toronto'> Toronto</label>
                   <br></br>
                   <input
-                    type='checkbox'
-                    id='Location1'
-                    name='Location1'
+                    type='radio'
+                    id='Ottawa'
+                    value='Ottawa'
+                    name='Location'
+                    onClick={this.searchyByLocation.bind(this)}
                   ></input>
-                  <label> Mississauga</label>
+                  <label htmlFor='Ottawa'> Ottawa</label>
                   <br></br>
                   <input
-                    type='checkbox'
-                    id='Location1'
-                    name='Location1'
+                    type='radio'
+                    id='Mississauga'
+                    value='Mississauga'
+                    name='Location'
+                    onClick={this.searchyByLocation.bind(this)}
                   ></input>
-                  <label> Markham</label>
+                  <label htmlFor='Mississauga'> Mississauga</label>
                   <br></br>
-                </div>
+                </form>
               </div>
             </div>
 
@@ -383,6 +406,7 @@ class PostsPage extends React.Component {
             </div>
           </div>
         </div>
+        <Alert />
         <div className='containerPosts'>
           <h2 className='textDefaultColor-Posts'>All Posts</h2>
           <div className='post-form'>
@@ -399,7 +423,7 @@ class PostsPage extends React.Component {
                   id='title'
                   onChange={this.onChangeEvent}
                 />
-                <label className='labelDefault'>Price</label>
+                <label className='labelDefault'>Price (CAD)</label>
                 <input
                   className='inputGroup-Posts'
                   type='number'
@@ -415,7 +439,7 @@ class PostsPage extends React.Component {
                     id='category'
                     onChange={this.onChangeEvent}
                   >
-                    <option selected value='Fruit'> Fruit </option>
+                    <option value='Fruit'> {' '}Fruit{' '} </option>
                     <option value='Vegtable'> Vegtable</option>
                     <option value='Grain'> Grain </option>
                     <option value='Meat'> Meat </option>
@@ -454,7 +478,7 @@ class PostsPage extends React.Component {
               </form>
             </div>
             <div className='allPosts'>{filteredPostItems}</div>
-            {!this.isAdmin ? reportForm : ''}
+            {this.isAdmin ? "" : reportForm}
           </div>
         </div>
       </section>
@@ -467,15 +491,17 @@ class PostsPage extends React.Component {
 //   test: state.loginState
 // })
 
-export default withRouter(connect(null, {
-  setAlert,
-  reportPost,
-  loadAllPosts,
-  createPost,
-  likePost,
-  dislikePost,
-  deletePost,
-})(PostsPage));
+export default withRouter(
+  connect(null, {
+    setAlert,
+    reportPost,
+    loadAllPosts,
+    createPost,
+    likePost,
+    dislikePost,
+    deletePost,
+  })(PostsPage)
+);
 
 // export default connect(null, {
 //   setAlert,

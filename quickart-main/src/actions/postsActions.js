@@ -7,6 +7,8 @@ import {
   LIKE_POST_FAILED,
   DISLIKE_POST_SUCCESS,
   DISLIKE_POST_FAILED,
+  DELETE_POST_SUCESS,
+  DELETE_POST_FAILED
 } from '../constants';
 
 export function loadAllPosts(jwbToken) {
@@ -40,10 +42,11 @@ export function createPost(post, jwbToken) {
       title: post.title,
       price: Number(post.price),
       category: post.category,
-      date: post.postEndDate,
+      postEndDate: post.postEndDate,
       description: post.description,
       pickUpOptions: post.pickUpOptions
     });
+    console.log(passing)
     return fetch(`http://localhost:5000/posts`, {
       method: 'POST',
       headers: {
@@ -75,7 +78,7 @@ export function likePost(post, jwbToken) {
     // connection to Mongo DB and try to like the post
     // if we were able to successfully connect and like the post
     return fetch(`http://localhost:5000/posts/like/${post}`, {
-      method: 'POST',
+      method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'x-auth-token': jwbToken,
@@ -86,7 +89,7 @@ export function likePost(post, jwbToken) {
         console.log('Success:', data);
         dispatch({
           type: LIKE_POST_SUCCESS,
-          msg: 'likePost POST happened',
+          msg: 'likePost PUT happened',
           post,
         });
       });
@@ -94,24 +97,35 @@ export function likePost(post, jwbToken) {
     // if any of the catches trigger, meaning connection or update failed
     // dispatch({
     //   type: LIKE_POST_FAILED,
-    //   msg: 'likePost POST happened'
+    //   msg: 'likePost PUT happened'
     // })
   };
 }
 
-export function dislikePost(post) {
+export function dislikePost(post, jwbToken) {
   return dispatch => {
     // connection to Mongo DB and try to dislike the post
     // if we were able to successfully connect and dislike the post
-    dispatch({
-      type: DISLIKE_POST_SUCCESS,
-      msg: 'dislikePost POST happened',
-      post,
+    return fetch(`http://localhost:5000/posts/dislike/${post}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': jwbToken,
+      },
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log('Success:', data);
+      dispatch({
+        type: DISLIKE_POST_SUCCESS,
+        msg: 'dislikePost PUT happened',
+        post,
+      });
     });
     // if any of the catches trigger, meaning connection or update failed
     // dispatch({
     //   type: DISLIKE_POST_SUCCESS,
-    //   msg: 'dislikePost POST happened'
+    //   msg: 'dislikePost PUT happened'
     // })
   };
 }
@@ -154,8 +168,8 @@ export function deletePost(postID, jwbToken) {
       .then(data => {
         console.log('Success:', data);
         dispatch({
-          type: SINGLE_POST_LOADED,
-          msg: 'loadONEPosts GET happened',
+          type: DELETE_POST_SUCESS,
+          msg: 'deletePost DELETE happened',
           data,
         });
       });

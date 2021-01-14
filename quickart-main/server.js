@@ -20,6 +20,7 @@ const gravatar = require('gravatar');
 
 // Express validator
 const { check, validationResult } = require('express-validator');
+
 // Mongo and Mongoose
 const { ObjectID } = require('mongodb')
 const { mongoose } = require('./db/mongoose');
@@ -27,8 +28,9 @@ const Message = require('./models/message');
 const Post = require('./models/post');
 const Profile = require('./models/profile');
 const User = require('./models/user');
+const Report = require('./models/reports');
 
-/// Route for getting all restaurant information.
+/// Route for getting all information.
 // GET /restaurants
 app.get('/', (req, res) => {
 	res.send('API running')
@@ -86,7 +88,8 @@ app.post('/auth', [
         // Return json web token
         const payload = {
             user: {
-                id: user.id
+                id: user.id,
+                accType: user.accType
             }
         }
         jwt.sign(payload, JWT, { expiresIn: 360000 }, (error, token) => {
@@ -146,7 +149,6 @@ app.post('/messages/:author_id/:recipient_id', auth, async(req, res) => {
         const message = await newMessage.save();
         res.json(message);
     } catch(error) {
-        console.log('ih')
         console.error(error.message);
         res.status(500).send('Server Error');
     }
@@ -168,14 +170,12 @@ app.get('/posts', auth, async (req, res) => {
 
 // GET /posts/:id - Get a post by id
 app.get('/posts/:id', auth, async (req, res) => {
-    console.log(req)
     try {
         const post = await Post.findById(req.params.id);
         if (!post) {
             return res.status(404).json({ msg: 'Post not found' });
         }
         // const posts = await Post.find().sort({ location: req.body.location });
-        console.log(post)
         res.json(post);
     } catch(error) {
         console.error(error.message);
@@ -193,15 +193,18 @@ app.delete('/posts/:id', auth, async (req, res) => {
         const post = await Post.findById(req.params.id);
         if (!post) {
             return res.status(404).json({ msg: 'Post not found' });
-		}
-        //Make sure user who is trying to delete post is the owner of post
-        //Only admins should be able to kill posts so its fine
-       /* 
-        if (post.postedBy.toString() !== req.user.id) {
-            return res.status(401).json({ msg: 'Unauthorized transaction' });
-        } 
-        */
+        }
+        await Report.deleteMany({ linkToPost: req.params.id });
+    
         await post.remove();
+        //Delete all reports
+        await Report.deleteMany({ linkToPost: req.params.id });
+        //Delete the post from owner's profile
+        const postersProfile = await Profile.findOne({ "postings._id": mongoose.Types.ObjectId(req.params.id) });
+        const keepPosts = await postersProfile.postings.filter(post => post._id != req.params.id);
+        postersProfile.postings = keepPosts;
+		await postersProfile.save()
+        // await Profile.deleteOne({ linkToPost: req.params.id });
         res.json({ msg: 'Post removed' });
     } catch(error) {
         console.error(error.message);
@@ -235,7 +238,7 @@ app.post('/posts',
                 title: req.body.title,
                 price: req.body.price,
                 category: req.body.category,
-                date: req.body.date,
+                postEndDate: req.body.postEndDate,
                 description: req.body.description,
                 pickUpOptions: req.body.pickUpOptions,
                 // likes: req.body.likes, //should always be [] initially
@@ -252,8 +255,7 @@ app.post('/posts',
 
 			const post = await newPost.save();
             // Append the post to the user's profile
-            profile.postings.push(newPost._id);
-            console.log(profile.postings)
+            profile.postings.push(newPost);
 			await profile.save();
             res.json(post);
         } catch(error) {
@@ -327,13 +329,13 @@ app.get('/profile/me', auth, async (req, res) => {
     }
 });
 
-// POST /profile/me - create empty profile JUMP
-app.post('/profile/me', async (req, res) => {
+// POST /profile/me - create empty profile
+app.post('/profile/me', auth, async (req, res) => {
     try {
         let profile = new Profile({
             tags: [],
             postings: [],
-            user: req.body.id,
+            user: req.user.id, //mongoose.Types.ObjectId(req.body.id),
             name: req.body.name,
             location: req.body.location,
             biography: "",
@@ -351,53 +353,59 @@ app.post('/profile/me', async (req, res) => {
 // POST /profile - create or update user profile
 // Can we delete check? I think front end has validation for this...
 app.post('/profile', auth, async (req, res) => {
-        console.log("Here")
-        const {
-            name,
-            location, 
-            biography, 
-            niche, 
-            tags, 
-            postings
-        } = req.body;
+    const {
+        name,
+        // email,
+        // password,
+        location, 
+        biography, 
+        niche, 
+        tags
+    } = req.body;
 
-        const profileFields = {}; 
-        profileFields.user = req.user.id;
-        if (name) {
-            profileFields.name = name;
-        }
-        if (location) {
-            profileFields.location = location;
-        }
-        if (biography) {
-            profileFields.biography = biography;
-        }
-        if (niche) {
-            profileFields.niche = niche;
-        }
-        if (tags) {
-            profileFields.tags = tags
-        }
-        if (postings) {
-            profileFields.postings = postings;
-        }
-        console.log(profileFields)
-        try {
-            let profile = await Profile.findOne({ user: req.user.id });
-            //we found the profile
-            if(profile) {
-                profile = await Profile.findOneAndUpdate({ user: req.user.id }, { $set: profileFields });//, { new: true });
-                return res.json(profile);
-            } 
-            //if not, we need to create profile
-            profile = new Profile(profileFields);
-            await profile.save();
-            res.json(profile);
-        } catch(error) {
-            console.error(error.message);
-            res.status(500).send('Server Error');
-        }
-        res.send();
+    const profileFields = {}; 
+    profileFields.user = req.user.id;
+    if (name) {
+        profileFields.name = name;
+    }
+    // if (email) {
+    //     profileFields.email = email;
+    // }
+    // if (password) {
+    //     // Encrypt password using bcrypt Create salt to hash
+    //     const salt = await bcrypt.genSalt(10); //documentation recommendation
+    //     profileFields.password = await bcrypt.hash(password, salt);
+    //     //profileFields.password = password;
+    // }
+    if (location) {
+        profileFields.location = location;
+    }
+    if (biography) {
+        profileFields.biography = biography;
+    }
+    if (niche) {
+        profileFields.niche = niche;
+    }
+    if (tags) {
+        profileFields.tags = tags
+    }
+
+    try {
+        let profile = await Profile.findOne({ user: req.user.id });
+        //we found the profile
+        if (profile) {
+            profile = await Profile.findOneAndUpdate({ user: req.user.id }, { $set: profileFields });//, { new: true });
+            return res.json(profile);
+        } 
+        //if not, we need to create profile
+        profile = new Profile(profileFields);
+        await profile.save();
+        res.json(profile);
+    } catch(error) {
+        console.error(error.message);
+        res.status(500).send('Server Error');
+    }
+    res.send();
 })
 
 // GET /profile - Get all profiles
@@ -451,8 +459,8 @@ app.delete('/profile', auth, async (req, res) => {
 // POST /users - Register a user
 app.post('/users', [
     check('name', 'Name is required').not().isEmpty(),
-    check('email', 'Please include a valid email').isEmail(),
-    check('password', 'Please enter a password with 6 or more characaters').isLength({ min: 6})
+    check('email', 'Please include a valid email').isEmail()
+    //check('password', 'Please enter a password with 6 or more characaters').isLength({ min: 6})
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -517,6 +525,41 @@ app.post('/users', [
         console.error(error.message);
         res.status(500).send('Sever error');
     }
+});
+
+////////////////////////////////////// REPORT ROUTES //////////////////////////////////////
+// POST /posts - Create a report for reportng a user
+app.get('/reports', auth, async (req, res) => {
+    try {
+        const posts = await Report.find();
+        // For now we dont include data since we dont have any to pass need to fix. 
+        res.json(posts);
+    } catch(error) {
+        console.error(error.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+app.post('/reports', 
+    async(req, res) => {
+        try {
+
+            let report = new Report({
+                reportedBy: req.body.reportedBy,
+                name: req.body.name,
+                reportDescription: req.body.reportDescription,
+                avatar: req.body.avatar,
+                reason: req.body.reason,
+                linkToPost: req.body.linkToPost,
+            });
+            console.log("report: ", report)
+            await report.save();
+            res.json(report);
+        } catch(error) {
+            console.error(error.message);
+            res.status(500).send('Server Error');
+        }
+        res.send();
 });
 
 

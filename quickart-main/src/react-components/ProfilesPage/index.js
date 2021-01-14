@@ -7,22 +7,22 @@ import store from '../../store';
 import { connect } from 'react-redux';
 import { setAlert } from '../../actions/alertActions';
 import { getProfile } from '../../actions/settingsActions';
-import { loadOnePosts } from '../../actions/postsActions'
+import { loadOnePosts } from '../../actions/postsActions';
 import { posts } from '../../allPosts';
 import './styles.css';
 
 /* Component for the User Profile Page */
 class ProfilesPage extends React.Component {
   state = {
-    posts: [],
-    tags: []
+    postings: [],
+    tags: [],
+    date: '',
   };
   isAdmin = '';
-  
+
   componentDidMount() {
-    this.loadState()
+    this.loadState();
   }
-  
 
   async loadState() {
     let reduxState = store.getState();
@@ -31,28 +31,62 @@ class ProfilesPage extends React.Component {
 
     //settingsState should be stored here
     reduxState = store.getState();
-    this.setState(reduxState['settingsState']);
 
     //This check needs to be updated for admin
-    let userType = reduxState['loginState']['user'];
-    this.isAdmin = userType === "admin"
+    let userType = reduxState['loginState']['accType'];
+    this.isAdmin = userType === 'admin';
+    console.log(this.isAdmin);
+    this.setState(reduxState['settingsState']);
   }
 
+
+  // const reportedPosts = this.state.user_posts.map(post => (
+  //   <div className='post backgroundWhite'>
+  //     <div className='lefttGridPost'>
+  //       <Link to='/profile'>
+  //         <img className='circleImgPosts' src={userPicture} alt='' />
+  //         <h4 className='postUser'>{post.name}</h4>
+  //       </Link>
+  //     </div>
+  //     <div className='rightGridPost'>
+  //       <h4>{post.reason}</h4>
+  //       <p className='smallMargin'>
+  //         {post.reportDescription}
+  //       </p>
+  //       <Link to={{ pathname: '/DetailPosting/' + post.linkToPost}}
+  //        className='btn btnDefault-report'>
+  //         View Reported Posting
+  //       </Link> 
+  //     </div>
+  //   </div>
+  // ));
+
   render() {
-    const allUserPosts = this.state.posts.map(post => (
+    const dateFormatData = this.state.postings.map(allPost => {
+      const formatter = { year: 'numeric', month: 'long', day: 'numeric' };
+      const newDate = new Date(allPost.postEndDate).toLocaleDateString(
+        [],
+        formatter
+      );
+      allPost.postEndDate = newDate.toString();
+    });
+
+    const allUserPosts = this.state.postings.map(post => (
       <div className='backgroundWhite'>
-        
         <div>
           <h4>
             {
               //Need to change the 'to' so it links to the actual post link
             }
-            <Link className='addSomeMargin' to='/posts'>
+            {/* <Link className='addSomeMargin' to='/posts'>
               {post.title}
-            </Link>
+            </Link> */}
+            <Link to={{ pathname: '/DetailPosting/' + post._id}} className='addSomeMargin'>
+              {post.title}
+            </Link> 
           </h4>
           <h6 className='addSomeMargin'>{post.postEndDate}</h6>
-          <p className='addSomeMargin'>{post.info}</p>
+          <p className='addSomeMargin'>{post.description}</p>
         </div>
       </div>
     ));
@@ -78,24 +112,23 @@ class ProfilesPage extends React.Component {
 
     const tags = (
       <div className='informationColour'>
-        <div className='tagBar'>
+        <div className='tagBar2'>
           <h2 className='textDefaultColor'> Tags </h2>
-          
         </div>
       </div>
     );
-    
+
     const allTags = this.state.tags.map(tag => (
-          <Button
-            size='small'
-            variant='outlined'
-            href=''
-            startIcon={<AddIcon />}
-            className={"tagOption-" + tag}
-          >
-            {tag}
-          </Button>
-      ))
+      <Button
+        size='small'
+        variant='outlined'
+        href=''
+        startIcon={<AddIcon />}
+        className={'tagOption-' + tag}
+      >
+        {tag}
+      </Button>
+    ));
 
     const userReports = (
       <Link to='/userReports' className='btn btnDefault'>
@@ -111,7 +144,7 @@ class ProfilesPage extends React.Component {
               <Link to='/editProfile' className='btn btnDefault'>
                 Edit Profile
               </Link>
-              {this.isAdmin ? '' : userReports}
+              {this.isAdmin ? userReports : ''}
             </div>
 
             <div className='profile-top backgroundDefault'>
@@ -125,15 +158,10 @@ class ProfilesPage extends React.Component {
             <div className='profile-about backgroundGrey '>
               <h2 className='textDefaultColor addSomeMargin'>Biography</h2>
 
-              <p className='addSomeMargin'> 
-
-                {this.state.biography}
-              </p>
+              <p className='addSomeMargin'>{this.state.biography}</p>
               {this.isAdmin ? '' : niche}
               {this.isAdmin ? '' : tags}
-              <ul className='tagbaritems'>
-                {this.isAdmin ? '' : allTags}
-              </ul>
+              <ul className='tagbaritems'>{this.isAdmin ? '' : allTags}</ul>
             </div>
             {this.isAdmin ? '' : postings}
             {this.isAdmin ? '' : allUserPosts}

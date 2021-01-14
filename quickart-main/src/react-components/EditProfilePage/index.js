@@ -8,19 +8,21 @@ import { updateProfile, getEditProfile, deleteUser } from '../../actions/setting
 import { setAlert } from '../../actions/alertActions';
 
 import './styles.css';
+import { Category } from '@material-ui/icons';
 
 /* Component for the Edit User Profile's Page*/
 class EditProfilePage extends React.Component {
   state = {
     user:"",
     name: "",
-    email: "",
-    password: "",
+    // email: "",
+    // password: "",
     location: "",
     biography: "",
     niche: "",
     tags: []
   };
+  possible_cats = ["Fruit", "Vegetables", "Meat", "Grain", "Other"]
 
   componentDidMount(){
     this.loadProfile()
@@ -31,12 +33,13 @@ class EditProfilePage extends React.Component {
     await this.props.getEditProfile(localStorage.token)
     reduxState = store.getState()
     this.setState(reduxState["settingsState"])
-
   }
+
   onTagEvent = e => {
     let value = e.target.value
     if(this.state.tags.includes(value)){
       this.state.tags.splice(this.state.tags.indexOf(value),1)
+      this.setState({tags: this.state.tags })
     }else{
       this.state.tags.push(value)
       console.log(value)
@@ -46,10 +49,7 @@ class EditProfilePage extends React.Component {
   
   onDeleteButton = async(e) =>{
     e.preventDefault();
-    console.log('i happened')
-    let reduxState = store.getState()
-    let userID = reduxState['loginState']['id']
-    await this.props.deleteUser(userID, localStorage.token)
+    await this.props.deleteUser(localStorage.token)
     window.location = '/'
   }
 
@@ -59,27 +59,12 @@ class EditProfilePage extends React.Component {
 
   onSubmitEvent = async(e) => {
     e.preventDefault();
-    if (!this.state.name){
-      this.props.setAlert('A name is required.', 'error');
-    } else if (!this.state.email) {
-      this.props.setAlert('An email is required.', 'error');
-    } else if (!this.state.password) {
-      this.props.setAlert('A password is required.', 'error');
-    } else if (!this.state.location){
-      this.props.setAlert('A location is required.', 'error');
-    } else if (!this.state.biography) {
-      this.props.setAlert('A biography is required.', 'error');
-    } else if (!this.state.niche){
-      this.props.setAlert('A niche is required.', 'error');
-    } else if (!this.state.tags){
-      this.props.setAlert('Tags are required.', 'error');
-    } else {
-      console.log(this.state)
+
       await this.props.updateProfile(this.state, localStorage.token);
       const state = store.getState();
 
       //FIX THIS WITH AN ACTUAL CHECK
-      const updateSuccess = true
+      let updateSuccess =Object.keys(state['settingsState']).length !== 0 ? true : false;
       if (updateSuccess) {
         this.props.history.push('/profile');
       } else {
@@ -88,10 +73,21 @@ class EditProfilePage extends React.Component {
           'error'
         );
       }
-    }
+    // }
   };
 
   render() {
+    const displaytags = this.possible_cats.map(element => (
+      <div>
+        {this.state.tags.includes(element) ?  
+        <input type='checkbox' id={element} value={element} onChange={this.onTagEvent} checked></input>
+        :
+        <input type='checkbox' id={element} value={element} onChange={this.onTagEvent}></input>
+        }
+        <label htmlFor={element}> {element} </label>
+        <br></br>
+      </div>
+    ))
     const niche = (
       <div className='form-group'>
         <textarea className='inputGroup' placeholder='Niche'></textarea>
@@ -112,8 +108,7 @@ class EditProfilePage extends React.Component {
                 placeholder={this.state.name}
                 onChange={this.onChangeEvent} />
             </div>
-
-            <label className='labelDefault'>Email Address</label>
+            {/* <label className='labelDefault'>Email Address</label>
             <div className='form-group'>
               <input
                 id='email'
@@ -129,10 +124,10 @@ class EditProfilePage extends React.Component {
                 id='password'
                 className='inputGroup'
                 type='password'
-                placeholder={this.state.password}
+                placeholder={'*******'}
                 onChange={this.onChangeEvent}
               />
-            </div>
+            </div> */}
             <label className='labelDefault'>Location</label>
             <div className='form-group'>
               <input
@@ -162,18 +157,8 @@ class EditProfilePage extends React.Component {
             </div>
             <label className='labelDefault'>Tags</label>
             <div className='tagCheckBox'>
-                <input type='checkbox' id="Fruit" value="Fruit" onChange={this.onTagEvent}></input>
-                <label htmlFor="Fruit"> Fruit </label>
-                <br></br>
-                <input type='checkbox' id="Vegetables" value="Vegetables" onChange={this.onTagEvent}></input>
-                <label htmlFor="Vegetables"> Vegetables </label>
-                <br></br>
-                <input type='checkbox' id="Meat" value="Meat" onChange={this.onTagEvent}></input>
-                <label htmlFor="Meat"> Meat </label>
-                <br></br>
-                <input type='checkbox' id="Other" value="Other" onChange={this.onTagEvent}></input>
-                <label htmlFor="Other"> Other </label>
-                <br></br>
+                {displaytags}
+                {console.log(this.state)}
             </div>
             {/* <input
               type='submit'
@@ -187,14 +172,17 @@ class EditProfilePage extends React.Component {
             >
               Submit
             </button>
-            <button
-              className='btn btnDefault'
-              type='button'
-              value="delete"
-              onClick={this.onDeleteButton}
-              >
-              Delete My Account
-            </button>
+            
+            {this.isAdmin ? "" : 
+              <button
+                className='btn btnDefault'
+                type='button'
+                value="delete"
+                onClick={this.onDeleteButton}
+                >
+                Delete My Account
+              </button>
+            }
             {/*<Link to='/' className='btn btnDefault'>
               Delete my Account
           </Link>*/}
